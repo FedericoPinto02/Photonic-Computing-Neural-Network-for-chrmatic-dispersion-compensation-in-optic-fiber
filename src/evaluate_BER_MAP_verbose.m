@@ -1,6 +1,6 @@
 function [BER, thresholds, rank_map, info] = evaluate_BER_MAP_verbose(yk, tx_aligned, verbose)
-% Decoder MAP con gaussiane robuste per i 4 livelli (dopo ordinamento per mediana)
-% Soglie = punti di pari densità tra adiacenti; fallback su "ordered" se classi mancanti.
+% Decoder MAP con gaussiane robuste per i 4 livelli
+% Soglie = punti di pari densità tra adiacenti. Fallback su "ordered" se classi mancanti.
 if nargin<3, verbose=false; end
 L=4; info=struct(); 
 counts = zeros(L,1); med = nan(L,1); q10 = nan(L,1); q90 = nan(L,1);
@@ -83,7 +83,7 @@ function t = thr_two_gauss(m1,s1,m2,s2)
 
     % scegli la radice tra m1 e m2 se esiste; altrimenti la più vicina al midpoint
     mid = (m1 + m2)/2;
-    candidates = [r1, r2];                    % ✅ crea una variabile
+    candidates = [r1, r2];
     in_between = (candidates > m1) & (candidates < m2);
     if any(in_between)
         t = candidates(find(in_between,1,'first'));

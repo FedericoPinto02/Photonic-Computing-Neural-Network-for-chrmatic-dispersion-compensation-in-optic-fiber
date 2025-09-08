@@ -1,13 +1,11 @@
 function [yk_best, tx_al_best, offset_best, info] = sample_and_align_auto( ...
     P_noisy, tx_symbols, Nsps, ref_power_wave, coarseSpan, K, lossOpts, alignOpts)
-% SAMPLE_AND_ALIGN_AUTO
 % Ricerca (o applica) l'offset di campionamento e restituisce i campioni simbolo-centrati.
 %
-% Nuovo argomento opzionale:
+% Argomento opzionale:
 %   alignOpts.fixed_offset  -> se presente, usa questo offset e SALTA ogni ricerca
 %   alignOpts.do_resample   -> default true; se false, niente ricerca coarse/fine
-%
-% Retro-compatibile: se alignOpts non è passato, comportamento identico a prima.
+
 
     % ---------- default opzionali ----------
     if nargin<5 || isempty(coarseSpan), coarseSpan = 2*Nsps; end

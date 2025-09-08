@@ -1,5 +1,5 @@
 function PM = expand_params(x, N, mode)
-% EXPAND_PARAMS  -> Restituisce una matrice Nx3 [theta, phi_u, phi_d]
+% Restituisce una matrice Nx3 [theta, phi_u, phi_d]
 %   mode='PO'   : theta=pi, phi_u = x(:), phi_d=0
 %   mode='FULL' : x è lungo 3N e viene reshaped in Nx3
 

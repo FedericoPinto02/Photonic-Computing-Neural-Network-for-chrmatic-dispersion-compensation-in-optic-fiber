@@ -1,18 +1,19 @@
 clear; close all; clc;
 rng(1234);  % solo per eventuali operazioni non controllate da RandStream
 
-%% -------------------------------
+
 %% 1) PARAMETRI DI CANALE / PNN
-%% -------------------------------
-params.Baud = 10e9;           % verrà allineato al dataset_train
-params.Nsps = 8;              % idem
+
+params.Baud = 10e9;
+params.Nsps = 8;
 params.Fs   = params.Baud*params.Nsps;
+% questi ultimi 3 saranno overrided dai file di dataset
 params.mode = 'PO';
 
-% fibra (coerente con esempi precedenti)
-params.beta2_ps2_per_m = -0.021;      % ps^2/m
-params.beta2 = params.beta2_ps2_per_m * 1e-24;   % s^2/m
-params.L = 125e3;                      % m (esempio 125 km)
+% fibra
+params.beta2_ps2_per_m = -0.021;                % ps^2/m
+params.beta2 = params.beta2_ps2_per_m * 1e-24;  % s^2/m
+params.L = 125e3;                               % m (esempio 125 km)
 
 % rumore
 params.OSNR_dB = 34;
@@ -25,9 +26,9 @@ params.dt = 25e-12;
 k_db     = [-19.0,-15.5,-14.8,-14.7,-21.4,-16.0,-18.0,-20.0];
 params.k = 10.^(k_db/20);
 
-%% --------------------------------------------------------------
+
 %% 2) CARICAMENTO DATASET FISSI (train/val/test)  
-%% --------------------------------------------------------------
+
 % Questi .mat sono creati da generate_fixed_datasets.m
 train = load('DataSets/dataset_val.mat');  % tx_symbols, tx_wave, ref_power_wave, Fs, Nsps, Baud, tvec
 val   = load('DataSets/dataset_val.mat');
@@ -38,7 +39,7 @@ params.Fs   = train.Fs;
 params.Nsps = train.Nsps;
 params.Baud = train.Baud;
 
-theta_id = (pi/2)*ones(params.N,1);  % 50:50 (mixing attivo)
+theta_id = (pi/2)*ones(params.N,1);  % 50:50 coupler
 phi_u_id = zeros(params.N,1);
 phi_d_id = zeros(params.N,1);
 PM_id = [theta_id, phi_u_id, phi_d_id];
@@ -53,23 +54,19 @@ lm_opts = struct('pLow',0.25,'pHigh',0.75, ...
                  'margin_pct',0.10, ...
                  'range_min_pct',0.90);
 
-%% -------------------------------------------------
+
 %% 3) BASELINE (bare fiber) su VALIDATION (facolt.)
-%% -------------------------------------------------
+
 P_noisy0 = forward_rx_chain(train.tx_wave, PM_id, params);
 [yk0, tx_al0, off_est] = sample_and_align_auto(P_noisy0, train.tx_symbols, params.Nsps, train.ref_power_wave);
 [loss0,~] = loss_margin(yk0, tx_al0, lm_opts);
 ber0 = evaluate_BER_MAP_verbose(yk0, tx_al0); 
 fprintf('Sanity check: bare fiber (TRAIN) -> loss = %.6f , BER ~ %.3f\n', loss0, ber0);
 
-% === NUOVO: offset fisso da usare nel training ===
-align_fixed = struct('fixed_offset', off_est, 'do_resample', false);
 
-%% ---------------------------------------------
 %% 4) DEFINIZIONE OBIETTIVO (usa DATASET FISSO)
-%% ---------------------------------------------
-%% --- PNN identità per stimare off* di training ---
 
+%% --- PNN 
 
 P_noisy_tr_id = forward_rx_chain(train.tx_wave, PM_id, params);
 [~, ~, off_star_train] = sample_and_align_auto( ...
@@ -83,32 +80,27 @@ objfun = @(x) loss(x, params, train.tx_symbols, train.tx_wave, ...
            'lossOpts', lm_opts, 'alignOpts', align_fixed));
 
 
-%% --------------------------------------
 %% 5) INIZIALIZZAZIONE PARAMETRI PSO (3N)
-%% --------------------------------------
-% Nota: se vuoi ridurre a 2N (phi_d inutile per U11), setta solo theta,phi_u
-init_theta = 0.1 * ones(params.N,1);
-init_phi_u = zeros(params.N,1);
-init_phi_d = zeros(params.N,1);
+
 init_x = zeros(params.N,1); 
 
-% Opzioni PSO (come prima)
+% Opzioni PSO
 pso_opts.numParticles = 30;
 pso_opts.maxIter = 120;
 pso_opts.w = 0.7; pso_opts.c1 = 1.5; pso_opts.c2 = 1.5;
 
-%% --------------------
+
 %% 6) TRAINING con PSO
-%% --------------------
+
 pso_opts.initSpread = 0.5*pi;
 fprintf('Starting PSO (%d params, N=%d, mode=%s)...\n', numel(init_x), params.N, params.mode);
 [best_x, history] = trainer_PSO(objfun, init_x, pso_opts);
 fprintf('PSO done. Best training loss = %.6g\n', min(history.bestFitness));
 
-%% --------------------------
+
 %% 7) REFINEMENT con ADAM (opz)
-%% --------------------------
-use_adam = true;  % metti a false per saltare ADAM
+
+use_adam = true;  % metti a false per skippare ADAM
 
 if use_adam
     fprintf('Starting ADAM refinement...\n');
@@ -122,19 +114,10 @@ if use_adam
 
     [x_refined, hist_adam] = trainer_ADAM(objfun, best_x, adam_opts);
     x_use = x_refined;
-else
-    x_use = best_x;
 end
 
-%% ---------------------------------------
+
 %% 8) ESTRAGO PARAMETRI MZI DAI VETTORI x
-%% ---------------------------------------
-% --- Unpack dei parametri ottimi, compatibile con FULL e PO ---
-if exist('x_refined','var') && ~isempty(x_refined)
-    x_use = x_refined;
-else
-    x_use = best_x;
-end
 
 N = params.N;
 wrapPi = @(a) mod(a + pi, 2*pi) - pi;  % wrap in [-pi, pi]
@@ -162,19 +145,14 @@ end
 
 param_matrix_opt = [theta_opt, phi_u_opt, phi_d_opt];
 
-%% -----------------------------------------------
+
 %% 9) VALUTAZIONE SU VALIDATION (dataset_val.mat)
-%% -----------------------------------------------
 
 % --- forward RX identico al training/paper ---
 P_noisy_val = forward_rx_chain(val.tx_wave, param_matrix_opt, params);
 
 [~, ~, off_star_val] = sample_and_align_auto( ...
     P_noisy_val, val.tx_symbols, params.Nsps, val.ref_power_wave, 6, 3, lm_opts);
-
-a1 = struct('fixed_offset', off_star_val, 'do_resample', false);
-[yk_val, tx_al_val] = sample_and_align_auto( ...
-    P_noisy_val, val.tx_symbols, params.Nsps, val.ref_power_wave, 0, 0, lm_opts, a1);
 
 loss_val = compute_loss_L2(P_noisy_val, val.tx_symbols, params.Nsps, val.ref_power_wave, lm_opts, struct());
 
@@ -188,9 +166,7 @@ fprintf('Validation -> off0=%d, off*=%d, loss=%.3e, BER=%.6f\n', ...
     info_align_val.off0, off_val, val_loss, val_BER);
 
 
-%% -------------------------------------------
 %% 10) VALUTAZIONE SU TEST (dataset_test.mat)
-%% -------------------------------------------
 P_noisy_test = forward_rx_chain(test.tx_wave, param_matrix_opt, params);
 
 [~, ~, off_star_tst] = sample_and_align_auto( ...
@@ -201,7 +177,6 @@ a1 = struct('fixed_offset', off_star_tst, 'do_resample', false);
     P_noisy_test, test.tx_symbols, params.Nsps, test.ref_power_wave, 0, 0, lm_opts, a1);
 
 loss_tst = compute_loss_L2(P_noisy_test, test.tx_symbols, params.Nsps, test.ref_power_wave, lm_opts, struct());
-
 
 
 %% ===== Final TEST =====
@@ -220,8 +195,6 @@ a1 = struct('fixed_offset', off_star_test, 'do_resample', false);
 % 4) Loss L2 (k & k+1) come nel training
 loss_test = compute_loss_L2(P_noisy_test, test.tx_symbols, params.Nsps, test.ref_power_wave, lm_opts, struct());
 
-% 5) ... qui continui con il tuo MAP/threshold/BER usando yk_test ...
-
 
 [yk_t, tx_al_t, off_t, info_align_t] = sample_and_align_auto( ...
     P_noisy_test, test.tx_symbols, params.Nsps, test.ref_power_wave, 4*params.Nsps, 2);
@@ -235,11 +208,8 @@ fprintf('Final TEST -> off0=%d, off*=%d, loss_margin=%.3e, BER=%.6f\n', ...
     info_align_t.off0, off_t, final_loss, final_BER);
 
 
-
-%% ============================================================
-%  10-bis) MULTI-RUN EVAL (20 acquisizioni) — pesi fissi
+%%  10-bis) MULTI-RUN EVAL (20 acquisizioni) — pesi fissi
 %  Catena identica: forward_rx_chain + L2 + MAP (soglie gaussiane)
-% ============================================================
 
 nRuns     = 20;
 seed_base = 50000;   % puoi cambiare
@@ -325,10 +295,9 @@ fprintf('Loss_L2  = %.3e  ±  %.3e\n', muL_tst, sdL_tst);
 fprintf('BER      = %.3e  ±  %.3e\n', muB_tst, sdB_tst);
 fprintf('off*     = %.2f  ±  %.2f\n\n', muO_tst, sdO_tst);
 
-%% ============================================================
-%  11) SWEEP OSNR @ 0.1 nm — BER vs OSNR (paper-faithful)
+
+%%  11) SWEEP OSNR @ 0.1 nm — BER vs OSNR (paper-faithful)
 %  Pesi fissi (param_matrix_opt), catena: forward_rx_chain + L2 + MAP
-% ============================================================
 
 OSNR_grid_dB = 28:2:40;   % scegli i punti che ti interessano
 nRunsOSNR    = 20;        % media su 20 acquisizioni per ciascuna OSNR
@@ -416,7 +385,7 @@ for io = 1:nO
         OSNR_grid_dB(io), muL_tst_osnr(io), sdL_tst_osnr(io), muB_tst_osnr(io), sdB_tst_osnr(io));
 end
 
-% ------------------ PLOT (stile paper) ------------------
+% ------------------ PLOT ------------------
 figure; hold on; grid on; box on;
 errorbar(OSNR_grid_dB, muB_val_osnr, sdB_val_osnr, '-o', 'DisplayName','Validation');
 errorbar(OSNR_grid_dB, muB_tst_osnr, sdB_tst_osnr, '-s', 'DisplayName','Test');
@@ -434,10 +403,8 @@ title('Loss L_2 vs OSNR (media \pm std su nRuns)');
 legend('Location','northeast');
 
 
-
-%% -----------------------------
 %% 11) PLOT (convergenza, ecc.)
-%% -----------------------------
+
 figure; plot(history.iter, history.bestFitness, '-o');
 xlabel('PSO iter'); ylabel('best loss'); title('PSO convergence');
 
@@ -465,7 +432,7 @@ title(sprintf('off* TEST (mean=%.2f, std=%.2f)', mean(off_tst_runs), std(off_tst
 
 
 
-
+% *** secondary help function
 
 function lossL2 = compute_loss_L2(P_noisy, tx_symbols, Nsps, ref_wave, lm_opts, alignOpts)
     if nargin<6, alignOpts = struct(); end

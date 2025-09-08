@@ -1,5 +1,4 @@
 function P_noisy = forward_rx_chain(tx_wave, param_matrix, params)
-% FORWARD_RX_CHAIN
 % PNN (pre) -> fibra -> filtro ottico 30 GHz -> ASE @ 0.1 nm (sul CAMPO)
 %           -> photodetection -> LPF elettrico 16 GHz -> power floor
 
@@ -9,7 +8,7 @@ function P_noisy = forward_rx_chain(tx_wave, param_matrix, params)
     E_eq = PNN(tx_wave(:).', Fs, params.dt, params.k(:).', param_matrix);
 
     % 2) Fibra (CD)
-    E_rx = fiberPropagate_freqdomain(E_eq, Fs, params.beta2, params.L);
+    E_rx = fiber_propagate_freqdomain(E_eq, Fs, params.beta2, params.L);
 
     % 3) Filtro OTTICO 30 GHz
     E_f = opt_bpf_field(E_rx, Fs, 30e9);
@@ -21,16 +20,80 @@ function P_noisy = forward_rx_chain(tx_wave, param_matrix, params)
         E_n = E_f;
     end
 
-    % 5) Photodetection + LPF elettrico 16 GHz
-    P_det = photodetect(E_n);
+    % 5) Photodetection (|E|^2) + LPF elettrico 16 GHz
+    P_det = abs(E_n).^2;   % photodetection (|E|^2)
     P_rx  = rx_lpf_elec(P_det, Fs, 16e9);
 
     % 6) Robustezza numerica
-    P_noisy = apply_power_floor(P_rx, 0.01);
+    P_noisy = apply_power_floor(P_rx, 0.01); % floor = quantile 1%
     P_noisy = P_noisy(:);
 end
 
 % ===================== SUBFUNZIONI =====================
+
+function E_rx = fiber_propagate_freqdomain(E_in, Fs, beta2, L)
+% fiber_propagate_freqdomain - propaga campo E_in su fibra length L con beta2
+% E_rx = fiber_propagate_freqdomain(E_in, Fs, beta2, L)
+% beta2 in [s^2/m], L in [m]
+
+N = length(E_in);
+Nfft = 2^nextpow2(N);
+Epad = [E_in, zeros(1, Nfft-N)]; % zero-pad
+Efreq = fftshift(fft(Epad));
+
+% frequency vector (Hz)
+f = (-Nfft/2:Nfft/2-1)*(Fs/Nfft);
+omega = 2*pi*f;
+
+% transfer function H(omega)
+H = exp(-1j*0.5 * beta2 * L .* (omega.^2));
+
+Eout_freq = Efreq .* H;
+Eout_time = ifft(ifftshift(Eout_freq));
+Eout_time = Eout_time(1:N); % trim padding
+
+E_rx = Eout_time;
+end
+
+function PNN = PNN(E_in, Fs, dt, k_vect, param_matrix)
+%   Creates delayed replicas of E_in (spacing dt at sampling Fs), applies per-tap
+%   amplitudes k_vect and MZI params param_matrix [theta, phi_u, phi_d], then coherently
+
+if size(param_matrix,2) ~= 3
+    error('param_matrix must be N x 3: [theta, phi_u, phi_d]');
+end
+
+N = size(param_matrix,1);
+Nsamples = length(E_in);
+PNN = zeros(1, Nsamples);
+
+for i=1:N
+    theta_i = param_matrix(i,1);
+    phi_u_i = param_matrix(i,2);
+    phi_d_i = param_matrix(i,3);
+    
+    % compute tap MZI matrix (only top-top gain - U(1,1) )
+    G11 = (-1j .* exp(-1j*theta_i/2)) .* sin(theta_i/2) .* exp(-1j*phi_u_i);
+
+    % delay (shift)
+    shift_s = (i-1)*dt;
+    shift_samples = round(shift_s * Fs);
+    sig_shifted = zeros(1, Nsamples);
+    if shift_samples < Nsamples
+        sig_shifted(shift_samples+1:end) = E_in(1:Nsamples-shift_samples);
+    end
+
+    % accumulate (apply tap loss k_vect(i) and MZI gain)
+    PNN = PNN + k_vect(i) * (G11 .* sig_shifted);
+end
+end
+
+function P_f = apply_power_floor(P, alpha)
+% evita massicci zeri dopo il rumore: clippa a un percentile basso
+if nargin<2 || isempty(alpha), alpha = 0.01; end
+flo = quantile(P(:), alpha);
+P_f = max(P, flo);
+end
 
 function E_noisy = add_ASE_OSNR_field(E_sig, OSNR_dB, Fs, Bopt_Hz, RBW_nm)
 % Aggiunge ASE complesso coerente con OSNR @ RBW_nm (default 0.1 nm) sul CAMPO.
@@ -50,7 +113,7 @@ function E_noisy = add_ASE_OSNR_field(E_sig, OSNR_dB, Fs, Bopt_Hz, RBW_nm)
 
     E_noisy = E_sig + n;
 
-    % Ri-limita alla banda ottica (se utile)
+    % Rilimita alla banda ottica (check se utile)
     if ~isempty(Bopt_Hz) && isfinite(Bopt_Hz) && Bopt_Hz > 0 && Bopt_Hz < Fs/2
         E_noisy = opt_bpf_field(E_noisy, Fs, Bopt_Hz);
     end

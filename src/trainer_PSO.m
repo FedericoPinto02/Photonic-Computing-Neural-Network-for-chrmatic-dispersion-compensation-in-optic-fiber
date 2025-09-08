@@ -1,7 +1,4 @@
 function [best_pos, history] = trainer_PSO(objfun, init_pos, opts)
-% trainer_PSO - PSO con inerzia "annealed" e early-stopping
-% USO:
-%   [best_pos, history] = trainer_PSO(objfun, init_pos, opts)
 %
 % opts richiesti:
 %   .numParticles
@@ -18,32 +15,32 @@ function [best_pos, history] = trainer_PSO(objfun, init_pos, opts)
 % Backward-compat:
 %   Se esiste opts.w (vecchio schema), allora wStart=wEnd=opts.w (niente annealing).
 
-    % ---- dimensioni/problem setup ----
+    % dimensioni/problem setup 
     Nvar         = numel(init_pos);
     numParticles = opts.numParticles;
     maxIter      = opts.maxIter;
     c1 = opts.c1;  c2 = opts.c2;
 
-    % ---- default nuovi ----
+    % default nuovi
     wStart     = 0.9;  if isfield(opts,'wStart'),     wStart = opts.wStart; end
     wEnd       = 0.4;  if isfield(opts,'wEnd'),       wEnd   = opts.wEnd;   end
     tol        = 0.02; if isfield(opts,'tol'),        tol    = opts.tol;    end
     patience   = 15;   if isfield(opts,'patience'),   patience = opts.patience; end
     initSpread = pi;   if isfield(opts,'initSpread'), initSpread = opts.initSpread; end
 
-    % ---- compatibilità: opts.w fisso prevale ----
+    % compatibilità: opts.w fisso prevale 
     if isfield(opts,'w')
         wStart = opts.w;
         wEnd   = opts.w;
     end
 
-    % ---- inizializzazione swarm ----
+    % inizializzazione swarm 
     X = repmat(init_pos(:)', numParticles, 1) + (rand(numParticles, Nvar)-0.5)*2*initSpread;
     V = zeros(numParticles, Nvar);
     pbest = X;
     pbest_val = inf(numParticles,1);
 
-    % ---- valutazione iniziale ----
+    % valutazione iniziale 
     for i=1:numParticles
         val = objfun(X(i,:)');
         pbest_val(i) = val;
@@ -51,11 +48,11 @@ function [best_pos, history] = trainer_PSO(objfun, init_pos, opts)
     [gbest_val, idx] = min(pbest_val);
     gbest = pbest(idx,:);
 
-    % ---- history ----
+    % history 
     history.iter = [];
     history.bestFitness = [];
 
-    % ---- early-stop bookkeeping ----
+    % early-stop bookkeeping 
     prev_best = gbest_val;
     stall = 0;
 
@@ -94,7 +91,7 @@ function [best_pos, history] = trainer_PSO(objfun, init_pos, opts)
             fprintf('PSO iter %d / %d : best loss = %.4g\n', iter, maxIter, gbest_val);
         end
 
-        % ---- early stopping ----
+        % early stopping 
         if (prev_best - gbest_val) > tol
             stall = 0;
             prev_best = gbest_val;

@@ -1,6 +1,6 @@
 function [loss_val, diag] = loss(x, params, tx_symbols, tx_wave, opts)
-% LOSS — funzione obiettivo per il training della tua PNN
-% - Supporta FULL (3N) e PO (N) via params.mode
+% LOSS — funzione obiettivo per il training della PNN
+% - Supporta sia FULL (3N) che PO (N) con params.mode
 % - Usa sample_and_align_auto con alignOpts passati da Main
 % - Valuta loss_margin (smooth, non si azzera)
 %
@@ -137,58 +137,3 @@ if nargout > 1
 end
 
 end
-
-% ====== SUBFUNZIONI DI SUPPORTO =========================================
-function E_noisy = add_ASE_OSNR_field(E_sig, OSNR_dB, Fs, Bopt_Hz, RBW_nm)
-% Aggiunge ASE complesso a banda ottica, coerente con OSNR @ RBW_nm (default 0.1 nm).
-% E_sig: campo ottico complesso (vettore riga/colonna)
-% OSNR_dB: OSNR misurata con RBW_nm (tipicamente 0.1 nm)
-% Fs: sample rate del campo [Hz]
-% Bopt_Hz: larghezza del filtro ottico [Hz] (es. 30e9)
-% RBW_nm: resolution bandwidth dell'OSA in nanometri (default 0.1 nm)
-
-    if nargin < 5 || isempty(RBW_nm), RBW_nm = 0.1; end
-    c = 299792458; lambda0 = 1550e-9;
-    RBW_Hz = c/(lambda0^2) * (RBW_nm*1e-9);   % ~12.5 GHz @ 1550 nm
-    OSNR_lin = 10^(OSNR_dB/10);
-
-    % Potenza media del segnale (|E|^2 ∝ potenza)
-    Psig = mean(abs(E_sig).^2);
-
-    % Potenza di rumore riferita a RBW di riferimento
-    Pn_ref = Psig / OSNR_lin;        % [W] nella RBW dell'OSA
-    S_ASE  = Pn_ref / RBW_Hz;        % densità spettrale (W/Hz)
-
-    % Rumore bianco complesso discreto: var = S_ASE * Fs
-    sigma2 = S_ASE * Fs;
-    n = sqrt(sigma2/2) * (randn(size(E_sig)) + 1j*randn(size(E_sig)));
-
-    % Somma al campo
-    E_noisy = E_sig + n;
-
-    % ASE limitato dal filtro ottico
-    if ~isempty(Bopt_Hz) && isfinite(Bopt_Hz) && Bopt_Hz > 0 && Bopt_Hz < Fs/2
-        E_noisy = opt_bpf_field(E_noisy, Fs, Bopt_Hz);
-    end
-end
-
-function E_filt = opt_bpf_field(E_in, Fs, Bopt_Hz)
-% Low-pass ideale (campo complesso) con fc = Bopt_Hz (one-sided)
-    if Bopt_Hz >= Fs/2
-        E_filt = E_in; return;
-    end
-    N  = 257;                   % ordine FIR (puoi aumentare se vuoi roll-off più ripido)
-    fc = Bopt_Hz/(Fs/2);        % normalizzato (Nyquist)
-    h  = fir1(N-1, fc, 'low');  % LPF FIR
-    Er = filtfilt(h,1, real(E_in));
-    Ei = filtfilt(h,1, imag(E_in));
-    E_filt = complex(Er, Ei);
-end
-
-function y = rx_lpf_elec(x, Fs, f3dB)
-% LPF elettrico (Butterworth 5°) con f3dB (es. 16 GHz)
-    Wn = min(f3dB/(Fs/2), 0.999);
-    [b,a] = butter(5, Wn, 'low');
-    y = filtfilt(b,a, x(:));
-end
-% ========================================================================

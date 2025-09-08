@@ -1,5 +1,5 @@
 function [loss, diag] = loss_margin(yk, labels, opts)
-% LOSS_MARGIN  —  loss con margine tra classi PAM4, penalizza code e collasso
+% loss con margine tra classi PAM4, penalizza code e collasso
 %
 % USO:
 %   [loss, diag] = loss_margin(yk, labels)

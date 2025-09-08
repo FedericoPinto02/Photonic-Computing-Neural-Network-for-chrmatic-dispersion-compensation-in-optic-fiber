@@ -1,8 +1,4 @@
 function [x_best, hist] = trainer_ADAM(objfun, x0, opts)
-% trainer_ADAM - Refinement con ADAM sopra a objfun, gradiente stimato (SPSA o finite-diff)
-%
-% USO:
-%   [x_best, hist] = trainer_ADAM(objfun, x0, opts)
 %
 % opts (campi principali):
 %   .maxIter        (default 60)
@@ -20,7 +16,7 @@ function [x_best, hist] = trainer_ADAM(objfun, x0, opts)
 %   x_best : parametri con loss migliore trovati
 %   hist   : struct con .iter, .loss, .bestLoss, .alphaTrace
 
-    % ---- defaults ----
+    % defaults
     if ~isfield(opts,'maxIter'), opts.maxIter = 60; end
     if ~isfield(opts,'alpha'), opts.alpha = 0.02; end
     if ~isfield(opts,'beta1'), opts.beta1 = 0.9; end
@@ -45,7 +41,7 @@ function [x_best, hist] = trainer_ADAM(objfun, x0, opts)
     hist.alphaTrace = nan(opts.maxIter,1);
 
     for k = 1:opts.maxIter
-        % ---- stima gradiente ----
+        % stima gradiente 
         switch lower(opts.grad_estimator)
             case 'spsa'
                 delta = sign(randn(D,1));         % Rademacher {±1}
@@ -67,7 +63,7 @@ function [x_best, hist] = trainer_ADAM(objfun, x0, opts)
                 error('Unknown grad_estimator: %s', opts.grad_estimator);
         end
 
-        % ---- gradient clipping opzionale ----
+        % gradient clipping opzionale 
         if opts.clip_norm > 0
             gn = norm(g);
             if gn > opts.clip_norm
@@ -75,7 +71,7 @@ function [x_best, hist] = trainer_ADAM(objfun, x0, opts)
             end
         end
 
-        % ---- update ADAM ----
+        % update ADAM 
         b1 = opts.beta1; b2 = opts.beta2; eps = opts.eps;
         m = b1*m + (1-b1)*g;
         v = b2*v + (1-b2)*(g.^2);
@@ -86,7 +82,7 @@ function [x_best, hist] = trainer_ADAM(objfun, x0, opts)
         % wrap opzionale in [-pi, pi] (utile se i parametri sono fasi)
         x = wrap_step(x, opts.wrap_2pi);
 
-        % ---- eval corrente e best ----
+        % eval corrente e best 
         fcur = objfun(x);
         if fcur < bestLoss
             bestLoss = fcur;
@@ -96,7 +92,7 @@ function [x_best, hist] = trainer_ADAM(objfun, x0, opts)
         % decay LR leggero
         alpha = 0.98 * alpha;
 
-        % ---- logging ----
+        % logging 
         hist.loss(k) = fcur;
         hist.bestLoss(k) = bestLoss;
         hist.alphaTrace(k) = alpha;
