@@ -93,7 +93,7 @@ pso_opts.w = 0.7; pso_opts.c1 = 1.5; pso_opts.c2 = 1.5;
 %% 6) TRAINING con PSO
 
 pso_opts.initSpread = 0.5*pi;
-fprintf('Starting PSO (%d params, N=%d, mode=%s)...\n', numel(init_x), params.N, params.mode);
+fprintf('Starting PSO (%d params, N=%d, mode=%s)\n', numel(init_x), params.N, params.mode);
 [best_x, history] = trainer_PSO(objfun, init_x, pso_opts);
 fprintf('PSO done. Best training loss = %.6g\n', min(history.bestFitness));
 
