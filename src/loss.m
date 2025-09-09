@@ -56,7 +56,7 @@ function [loss_val, diag] = loss(x, params, tx_symbols, tx_wave, opts)
         alignOpts = opts.alignOpts;
     end
 
-    % 3) (Opz.) Rumore riproducibile
+    % 3)  Rumore riproducibile
     prevRS = [];
     if isfield(opts,'noiseStream') && ~isempty(opts.noiseStream)
         try

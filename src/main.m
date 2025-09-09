@@ -59,7 +59,7 @@ lm_opts = struct('pLow',0.25,'pHigh',0.75, ...
 P_noisy0 = forward_rx_chain(train.tx_wave, PM_id, params);
 [yk0, tx_al0, off_est] = sample_and_align_auto(P_noisy0, train.tx_symbols, params.Nsps, train.ref_power_wave);
 [loss0,~] = loss_margin(yk0, tx_al0, lm_opts);
-ber0 = evaluate_BER_MAP_verbose(yk0, tx_al0); 
+ber0 = evaluate_BER_MAP(yk0, tx_al0); 
 fprintf('Sanity check: bare fiber (TRAIN) -> loss = %.6f , BER ~ %.3f\n', loss0, ber0);
 
 
@@ -106,7 +106,7 @@ if use_adam
     adam_opts.c_spsa  = 0.01;
     adam_opts.wrap_2pi = true;
     adam_opts.clip_norm = 0.0;
-    adam_opts.verbose = true;
+    
 
     [x_refined, hist_adam] = trainer_ADAM(objfun, best_x, adam_opts);
     x_use = x_refined;
@@ -156,7 +156,7 @@ loss_val = compute_loss_L2(P_noisy_val, val.tx_symbols, params.Nsps, val.ref_pow
     P_noisy_val, val.tx_symbols, params.Nsps, val.ref_power_wave, 2*params.Nsps, 2);
 
 [val_loss,~] = loss_margin(yk_val, tx_al_val, lm_opts);
-[val_BER, thr_val, rank_map_val, info_ber_val] = evaluate_BER_MAP_verbose(yk_val, tx_al_val, true);
+[val_BER, thr_val, rank_map_val, info_ber_val] = evaluate_BER_MAP(yk_val, tx_al_val);
 
 fprintf('Validation -> off0=%d, off*=%d, loss=%.3e, BER=%.6f\n', ...
     info_align_val.off0, off_val, val_loss, val_BER);
@@ -197,7 +197,7 @@ loss_test = compute_loss_L2(P_noisy_test, test.tx_symbols, params.Nsps, test.ref
 [final_loss, ~] = loss_margin(yk_t, tx_al_t, lm_opts);
 
 
-[final_BER, thr_t, rank_map_t, info_ber_t] = evaluate_BER_MAP_verbose(yk_t, tx_al_t, true);
+[final_BER, thr_t, rank_map_t, info_ber_t] = evaluate_BER_MAP(yk_t, tx_al_t);
 
 fprintf('Final TEST -> off0=%d, off*=%d, loss_margin=%.3e, BER=%.6f\n', ...
     info_align_t.off0, off_t, final_loss, final_BER);
@@ -233,7 +233,7 @@ for r = 1:nRuns
                                        val.ref_power_wave, lm_opts, a1);
 
     % BER con il tuo MAP gaussiano 
-    [ber_val_runs(r), ~, ~] = evaluate_BER_MAP_verbose(yk_val_r, tx_val_r, false);
+    [ber_val_runs(r), ~, ~] = evaluate_BER_MAP(yk_val_r, tx_val_r);
 end
 
 % TEST 
@@ -258,7 +258,7 @@ for r = 1:nRuns
     loss_tst_runs(r) = compute_loss_L2(P_tst_r, test.tx_symbols, params.Nsps, ...
                                        test.ref_power_wave, lm_opts, a1);
 
-    [ber_tst_runs(r), ~, ~] = evaluate_BER_MAP_verbose(yk_tst_r, tx_tst_r, false);
+    [ber_tst_runs(r), ~, ~] = evaluate_BER_MAP(yk_tst_r, tx_tst_r);
 end
 
 
@@ -331,7 +331,7 @@ for io = 1:nO
 
         % loss L2 e BER 
         loss_val_runs(r) = compute_loss_L2(P_val, val.tx_symbols, params.Nsps, val.ref_power_wave, lm_opts, a1);
-        [ber_val_runs(r), ~, ~] = evaluate_BER_MAP_verbose(yk_val, tx_val, false);
+        [ber_val_runs(r), ~, ~] = evaluate_BER_MAP(yk_val, tx_val);
 
         % TEST 
         P_tst = forward_rx_chain(test.tx_wave, param_matrix_opt, params);
@@ -344,7 +344,7 @@ for io = 1:nO
             P_tst, test.tx_symbols, params.Nsps, test.ref_power_wave, 0, 0, lm_opts, a1);
 
         loss_tst_runs(r) = compute_loss_L2(P_tst, test.tx_symbols, params.Nsps, test.ref_power_wave, lm_opts, a1);
-        [ber_tst_runs(r), ~, ~] = evaluate_BER_MAP_verbose(yk_tst, tx_tst, false);
+        [ber_tst_runs(r), ~, ~] = evaluate_BER_MAP(yk_tst, tx_tst);
     end
 
     % statistiche per questa OSNR
@@ -371,50 +371,7 @@ for io = 1:nO
         OSNR_grid_dB(io), muL_tst_osnr(io), sdL_tst_osnr(io), muB_tst_osnr(io), sdB_tst_osnr(io));
 end
 
-% PLOT 
-figure; hold on; grid on; box on;
-errorbar(OSNR_grid_dB, muB_val_osnr, sdB_val_osnr, '-o', 'DisplayName','Validation');
-errorbar(OSNR_grid_dB, muB_tst_osnr, sdB_tst_osnr, '-s', 'DisplayName','Test');
-set(gca,'YScale','log');
-yline(2e-3, '--', 'Pre-FEC 2e-3', 'LabelHorizontalAlignment','left');
-xlabel('OSNR @ 0.1 nm (dB)'); ylabel('BER'); 
-title('BER vs OSNR (media \pm std su nRuns)');
-legend('Location','southwest');
 
-figure; hold on; grid on; box on;
-errorbar(OSNR_grid_dB, muL_val_osnr, sdL_val_osnr, '-o', 'DisplayName','Validation');
-errorbar(OSNR_grid_dB, muL_tst_osnr, sdL_tst_osnr, '-s', 'DisplayName','Test');
-xlabel('OSNR @ 0.1 nm (dB)'); ylabel('Loss L_2');
-title('Loss L_2 vs OSNR (media \pm std su nRuns)');
-legend('Location','northeast');
-
-
-figure; plot(history.iter, history.bestFitness, '-o');
-xlabel('PSO iter'); ylabel('best loss'); title('PSO convergence');
-
-if use_adam
-    figure;
-    plot(hist_adam.loss,'-o'); hold on; plot(hist_adam.bestLoss,'-x');
-    xlabel('ADAM iter'); ylabel('loss'); legend('cur','best'); title('ADAM refinement');
-end
-
-eyewindow = params.Nsps*200;
-idx = 1:min(length(P_noisy_test), eyewindow);
-figure; plot(test.tvec(idx)*1e9, P_noisy_test(idx));
-xlabel('time (ns)'); ylabel('Detected power'); title('Eye snippet (TEST)');
-
-
-figure; 
-subplot(1,2,1); histogram(off_val_runs, 'BinMethod','integers');
-title(sprintf('off* VAL (mean=%.2f, std=%.2f)', mean(off_val_runs), std(off_val_runs)));
-subplot(1,2,2); histogram(off_tst_runs, 'BinMethod','integers');
-title(sprintf('off* TEST (mean=%.2f, std=%.2f)', mean(off_tst_runs), std(off_tst_runs)));
-
-
-
-
-
-%% [FIG1] BER vs OSNR @ 0.1 nm (Validation & Test)  — paper-style
 OSNR_grid_dB = 28:2:40;
 nRunsOSNR    = 20;
 
@@ -422,7 +379,7 @@ nRunsOSNR    = 20;
  muL_val_osnr,sdL_val_osnr,muL_tst_osnr,sdL_tst_osnr] = ...
     sweep_OSNR_and_eval(param_matrix_opt, params, val, test, lm_opts, OSNR_grid_dB, nRunsOSNR);
 
-% --- BER plot ---
+%  BER plot 
 figure('Name','Figure 1'); hold on; grid on; box on;
 errorbar(OSNR_grid_dB, muB_val_osnr, sdB_val_osnr, '-o', 'DisplayName','Validation');
 errorbar(OSNR_grid_dB, muB_tst_osnr, sdB_tst_osnr, '-s', 'DisplayName','Test');
@@ -434,7 +391,7 @@ legend('Location','southwest');
 set(gcf,'Color','w'); 
 saveas(gcf,'Figure1_BER_vs_OSNR.png');
 
-% --- Loss plot (facoltativo) ---
+% Loss plot 
 figure('Name','Figure 2'); hold on; grid on; box on;
 errorbar(OSNR_grid_dB, muL_val_osnr, sdL_val_osnr, '-o', 'DisplayName','Validation');
 errorbar(OSNR_grid_dB, muL_tst_osnr, sdL_tst_osnr, '-s', 'DisplayName','Test');
@@ -444,13 +401,13 @@ legend('Location','northeast'); set(gcf,'Color','w');
 saveas(gcf,'Figure2_L2_vs_OSNR.png');
 
 
-%% [FIG3] PSO convergence
+%% PSO convergence
 figure('Name','Figure 3'); hold on; grid on; box on;
 plot(history.iter, history.bestFitness, '-o','MarkerFaceColor','w');
 xlabel('PSO iter'); ylabel('best loss'); title('PSO convergence'); set(gcf,'Color','w');
 saveas(gcf,'Figure3_PSO_convergence.png');
 
-%% [FIG4] ADAM refinement
+%% ADAM refinement
 if use_adam
     figure('Name','Figure 4'); hold on; grid on; box on;
     plot(hist_adam.loss,'-o','DisplayName','cur'); 
@@ -461,11 +418,10 @@ if use_adam
 end
 
 
-%% [FIG5] Eye diagrams: BTB vs Fiber vs PNN (TEST set)
-eyewin_sym = 200;  % finestrella per occhi
+%% [ Eye diagrams: BTB vs Fiber vs PNN (TEST set)
+eyewin_sym = 200;  
 
-% --- BTB (no CD, no PNN, solo detect+LPF) ---
-params_BTB = params; params_BTB.L = 0;  % niente fibra
+params_BTB = params; params_BTB.L = 0;  
 E_btb = test.tx_wave(:).';
 E_btb_f = opt_bpf_field(E_btb, params.Fs, 30e9);
 P_btb = rx_lpf_elec(abs(E_btb_f).^2, params.Fs, 16e9);
@@ -486,9 +442,9 @@ sgtitle('Eye diagrams (TEST)');
 saveas(gcf,'Figure5_Eyes_BTB_Fiber_PNN.png');
 
 
-%% [FIG6] CD-induced power penalty (empirical RF sweep)
-fRF = linspace(1e9, 40e9, 60);     % 1..40 GHz
-m   = 0.05;                        % piccola modulazione
+%% CD-induced power penalty (empirical RF sweep)
+fRF = linspace(1e9, 40e9, 60);     
+m   = 0.05;                        
 [pen_BTB, pen_FIB, pen_PNN] = measure_penalty_RF(fRF, m, params, test.tx_wave, param_matrix_opt);
 
 figure('Name','Figure 6'); hold on; grid on; box on;
@@ -505,9 +461,6 @@ Pth = -20*log10(abs(cos(0.5*beta2*L.*(w.^2))));
 plot(fRF/1e9, Pth, ':', 'DisplayName','Theory (CD only)');
 legend show;
 
-
-
-%% *** secondary help function for loss
 
 function lossL2 = compute_loss_L2(P_noisy, tx_symbols, Nsps, ref_wave, lm_opts, alignOpts)
     if nargin<6, alignOpts = struct(); end
@@ -537,7 +490,7 @@ end
 
 function [muB_val,sdB_val,muB_tst,sdB_tst,muL_val,sdL_val,muL_tst,sdL_tst] = ...
     sweep_OSNR_and_eval(PM, params, val, test, lm_opts, OSNR_grid_dB, nRuns)
-% Refactor del tuo sweep OSNR (Validation & Test)
+
 
 prevRS = RandStream.getGlobalStream();
 prevOSNR = params.OSNR_dB; nO = numel(OSNR_grid_dB);
@@ -557,7 +510,7 @@ for io = 1:nO
         a = struct('fixed_offset',off_v,'do_resample',false);
         [yk_v, tx_v] = sample_and_align_auto(P_val, val.tx_symbols, params.Nsps, val.ref_power_wave, 0,0,lm_opts,a);
         Lval(r) = compute_loss_L2(P_val, val.tx_symbols, params.Nsps, val.ref_power_wave, lm_opts, a);
-        Bval(r) = evaluate_BER_MAP_verbose(yk_v, tx_v, false);
+        Bval(r) = evaluate_BER_MAP(yk_v, tx_v);
 
         % --- Test
         P_t = forward_rx_chain(test.tx_wave, PM, params);
@@ -565,7 +518,7 @@ for io = 1:nO
         a = struct('fixed_offset',off_t,'do_resample',false);
         [yk_t, tx_t] = sample_and_align_auto(P_t, test.tx_symbols, params.Nsps, test.ref_power_wave, 0,0,lm_opts,a);
         Ltst(r) = compute_loss_L2(P_t, test.tx_symbols, params.Nsps, test.ref_power_wave, lm_opts, a);
-        Btst(r) = evaluate_BER_MAP_verbose(yk_t, tx_t, false);
+        Btst(r) = evaluate_BER_MAP(yk_t, tx_t);
     end
     muL_val(io)=mean(Lval); sdL_val(io)=std(Lval); muB_val(io)=mean(Bval); sdB_val(io)=std(Bval);
     muL_tst(io)=mean(Ltst); sdL_tst(io)=std(Ltst); muB_tst(io)=mean(Btst); sdB_tst(io)=std(Btst);
@@ -601,10 +554,10 @@ function Eo = opt_bpf_field(Ei, Fs, f3dB)
 end
 
 function Po = rx_lpf_elec(Pi, Fs, f3dB)
-% Gaussian low-pass su segnale elettrico reale, -3 dB @ f3dB
+% Gaussian low-pass su segnale elettrico reale, -3 dB 
     x = Pi(:).';
     N = numel(x);
-    [~, f] = make_freq_axis(N, Fs);                 % Hz
+    [~, f] = make_freq_axis(N, Fs);                 
     sigma = f3dB / sqrt(log(2));
     H = exp(-(f.^2)/(2*sigma^2));
     X = fftshift(fft(x));
@@ -613,7 +566,7 @@ function Po = rx_lpf_elec(Pi, Fs, f3dB)
 end
 
 function A = single_tone_amp(x, Fs, f0)
-% Stima l'ampiezza del tono a f0 (robusta)
+% Stima l'ampiezza del tono a f0 
     x = x(:).';
     N = numel(x);
     w = hann_local(N).';
@@ -637,14 +590,14 @@ function plot_eye(P, Nsps, nSym)
 end
 
 function [w, f] = make_freq_axis(N, Fs)
-% Restituisce asse angolare w (rad/s) e in Hz già allineati per fftshift
+% Restituisce asse angolare 
     df = Fs/N;
     if mod(N,2)==0
-        f = (-N/2:N/2-1)*df;    % Hz
+        f = (-N/2:N/2-1)*df;    
     else
         f = (-(N-1)/2:(N-1)/2)*df;
     end
-    w = 2*pi*f;                 % rad/s
+    w = 2*pi*f;                 
 end
 
 function y = hann_local(N)
@@ -656,14 +609,13 @@ function y = hann_local(N)
     end
 end
 
-%%
+
 function [penBTB, penFIB, penPNN] = measure_penalty_RF(fRF, m, params, tx_wave, PM)
-% Misura empirica della penalty: |A_out(f)| rispetto al BTB (dB)
-% Usa forward_rx_chain per il ramo "PNN + Fiber" (niente dipendenza diretta da PNN.m).
+
 Fs = params.Fs;
 t  = (0:numel(tx_wave)-1)/Fs;
 
-% Per una misura più stabile setto OSNR molto alto (quasi no noise).
+% Per una misura più stabile setto OSNR molto alto 
 params_pure = params; 
 if isfield(params,'OSNR_dB'), params_pure.OSNR_dB = 100; end
 
@@ -677,18 +629,18 @@ for k=1:numel(fRF)
     % Piccola AM sul campo trasmesso
     Ein = tx_wave(:).'.*(1 + m*cos(2*pi*f*t));
 
-    % --- BTB: solo filtri ottico + elettrico + fotodiodo (no fibra, no PNN)
+    %  BTB: solo filtri ottico + elettrico + fotodiodo (no fibra, no PNN)
     E0 = opt_bpf_field(Ein, Fs, 30e9);
     P0 = rx_lpf_elec(abs(E0).^2, Fs, 16e9);
     ampBTB(k) = single_tone_amp(P0, Fs, f);
 
-    % --- Solo fibra (no PNN)
+    % Solo fibra (no PNN)
     Ef = fiber_propagate_freqdomain(Ein, Fs, params_pure.beta2, params_pure.L);
     Ef = opt_bpf_field(Ef, Fs, 30e9);
     Pf = rx_lpf_elec(abs(Ef).^2, Fs, 16e9);
     ampFIB(k) = single_tone_amp(Pf, Fs, f);
 
-    % --- PNN + fibra: passo dalla tua catena ufficiale
+    %  PNN + fibra: passo dalla tua catena ufficiale
     Pp = forward_rx_chain(Ein, PM, params_pure);   % include PNN, fibra, ricevitore
     ampPNN(k) = single_tone_amp(Pp, Fs, f);
 end

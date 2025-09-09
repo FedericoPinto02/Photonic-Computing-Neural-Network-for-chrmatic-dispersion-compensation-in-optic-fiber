@@ -5,7 +5,7 @@ function [best_pos, history] = trainer_PSO(objfun, init_pos, opts)
 %   .maxIter
 %   .c1, .c2
 %
-% opts facoltativi (nuovi):
+% opts:
 %   .wStart (default 0.9)  - inerzia inizio
 %   .wEnd   (default 0.4)  - inerzia fine (lineare)
 %   .tol    (default 0.01) - soglia miglioramento per reset stall

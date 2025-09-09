@@ -32,9 +32,8 @@ end
  
 
 function E_rx = fiber_propagate_freqdomain(E_in, Fs, beta2, L)
-% fiber_propagate_freqdomain - propaga campo E_in su fibra length L con beta2
-% E_rx = fiber_propagate_freqdomain(E_in, Fs, beta2, L)
-% beta2 in [s^2/m], L in [m]
+% fiber_propagate_freqdomain propaga campo E_in su fibra length L con beta2
+
 
 N = length(E_in);
 Nfft = 2^nextpow2(N);
@@ -45,7 +44,7 @@ Efreq = fftshift(fft(Epad));
 f = (-Nfft/2:Nfft/2-1)*(Fs/Nfft);
 omega = 2*pi*f;
 
-% transfer function H(omega)
+%Funzione trasferimento 
 H = exp(-1j*0.5 * beta2 * L .* (omega.^2));
 
 Eout_freq = Efreq .* H;
@@ -56,8 +55,7 @@ E_rx = Eout_time;
 end
 
 function PNN = PNN(E_in, Fs, dt, k_vect, param_matrix)
-%   Creates delayed replicas of E_in (spacing dt at sampling Fs), applies per-tap
-%   amplitudes k_vect and MZI params param_matrix [theta, phi_u, phi_d], then coherently
+
 
 if size(param_matrix,2) ~= 3
     error('param_matrix must be N x 3: [theta, phi_u, phi_d]');
@@ -72,10 +70,10 @@ for i=1:N
     phi_u_i = param_matrix(i,2);
     phi_d_i = param_matrix(i,3);
     
-    % compute tap MZI matrix (only top-top gain - U(1,1) )
+    % computa tap MZI 
     G11 = (-1j .* exp(-1j*theta_i/2)) .* sin(theta_i/2) .* exp(-1j*phi_u_i);
 
-    % delay (shift)
+    % delay 
     shift_s = (i-1)*dt;
     shift_samples = round(shift_s * Fs);
     sig_shifted = zeros(1, Nsamples);
@@ -83,7 +81,7 @@ for i=1:N
         sig_shifted(shift_samples+1:end) = E_in(1:Nsamples-shift_samples);
     end
 
-    % accumulate (apply tap loss k_vect(i) and MZI gain)
+    % accumulate 
     PNN = PNN + k_vect(i) * (G11 .* sig_shifted);
 end
 end
@@ -96,7 +94,7 @@ P_f = max(P, flo);
 end
 
 function E_noisy = add_ASE_OSNR_field(E_sig, OSNR_dB, Fs, Bopt_Hz, RBW_nm)
-% Aggiunge ASE complesso coerente con OSNR @ RBW_nm (default 0.1 nm) sul CAMPO.
+% Aggiunge ASE complesso coerente con OSNR (default 0.1 nm) sul CAMPO.
     if nargin < 5 || isempty(RBW_nm), RBW_nm = 0.1; end
     c = 299792458; lambda0 = 1550e-9;
     RBW_Hz  = c/(lambda0^2) * (RBW_nm*1e-9);   % ~12.5 GHz @ 1550 nm

@@ -107,7 +107,7 @@ function [yk_best, tx_al_best, offset_best, info] = sample_and_align_auto( ...
         end
     end
 
-    % ---------- Diagnostica ----------
+    % Diagnostica 
     info = struct();
     info.mode            = 'search';
     info.off0            = off0;

@@ -27,7 +27,7 @@ function [x_best, hist] = trainer_ADAM(objfun, x0, opts)
     if ~isfield(opts,'fd_eps'), opts.fd_eps = 1e-3; end
     if ~isfield(opts,'clip_norm'), opts.clip_norm = 0; end
     if ~isfield(opts,'wrap_2pi'), opts.wrap_2pi = false; end
-    if ~isfield(opts,'verbose'), opts.verbose = true; end
+    
 
     x = x0(:);
     D = numel(x);
@@ -97,9 +97,8 @@ function [x_best, hist] = trainer_ADAM(objfun, x0, opts)
         hist.bestLoss(k) = bestLoss;
         hist.alphaTrace(k) = alpha;
 
-        if opts.verbose && mod(k,10)==0
-            fprintf('ADAM iter %d/%d : loss=%.3e best=%.3e\n', k, opts.maxIter, fcur, bestLoss);
-        end
+
+        
     end
 end
 
