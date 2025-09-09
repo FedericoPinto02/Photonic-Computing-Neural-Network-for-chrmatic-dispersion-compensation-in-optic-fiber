@@ -1,6 +1,6 @@
 function [x_best, hist] = trainer_ADAM(objfun, x0, opts)
 %
-% opts (campi principali):
+% opts:
 %   .maxIter        (default 60)
 %   .alpha          learning rate iniziale (default 0.02)
 %   .beta1, .beta2  (default 0.9, 0.999)
@@ -44,11 +44,11 @@ function [x_best, hist] = trainer_ADAM(objfun, x0, opts)
         % stima gradiente 
         switch lower(opts.grad_estimator)
             case 'spsa'
-                delta = sign(randn(D,1));         % Rademacher {±1}
+                delta = sign(randn(D,1));         
                 c = opts.c_spsa;
                 fplus  = objfun(wrap_step(x + c*delta, opts.wrap_2pi));
                 fminus = objfun(wrap_step(x - c*delta, opts.wrap_2pi));
-                g = ((fplus - fminus) / (2*c)) * delta;  % elemento-i: ((f+ - f-)/(2c))*delta_i
+                g = ((fplus - fminus) / (2*c)) * delta;  
             case 'fd'
                 g = zeros(D,1);
                 f0 = objfun(x);
@@ -63,7 +63,7 @@ function [x_best, hist] = trainer_ADAM(objfun, x0, opts)
                 error('Unknown grad_estimator: %s', opts.grad_estimator);
         end
 
-        % gradient clipping opzionale 
+       
         if opts.clip_norm > 0
             gn = norm(g);
             if gn > opts.clip_norm
@@ -79,7 +79,7 @@ function [x_best, hist] = trainer_ADAM(objfun, x0, opts)
         vhat = v / (1 - b2^k);
         x = x - alpha * mhat ./ (sqrt(vhat) + eps);
 
-        % wrap opzionale in [-pi, pi] (utile se i parametri sono fasi)
+       
         x = wrap_step(x, opts.wrap_2pi);
 
         % eval corrente e best 
@@ -89,10 +89,10 @@ function [x_best, hist] = trainer_ADAM(objfun, x0, opts)
             x_best = x;
         end
 
-        % decay LR leggero
+        
         alpha = 0.98 * alpha;
 
-        % logging 
+        
         hist.loss(k) = fcur;
         hist.bestLoss(k) = bestLoss;
         hist.alphaTrace(k) = alpha;
@@ -105,7 +105,6 @@ end
 
 function xw = wrap_step(x, do_wrap)
     if do_wrap
-        % warpa in [-pi,pi] (adatto a parametri fase)
         xw = mod(x + pi, 2*pi) - pi;
     else
         xw = x;

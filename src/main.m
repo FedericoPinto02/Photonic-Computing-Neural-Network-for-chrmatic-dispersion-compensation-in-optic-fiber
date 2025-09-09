@@ -1,5 +1,5 @@
 clear; close all; clc;
-rng(1234);  % solo per eventuali operazioni non controllate da RandStream
+rng(1234);  
 
 
 %% 1) PARAMETRI DI CANALE / PNN
@@ -7,13 +7,12 @@ rng(1234);  % solo per eventuali operazioni non controllate da RandStream
 params.Baud = 10e9;
 params.Nsps = 8;
 params.Fs   = params.Baud*params.Nsps;
-% questi ultimi 3 saranno overrided dai file di dataset
 params.mode = 'PO';
 
 % fibra
-params.beta2_ps2_per_m = -0.021;                % ps^2/m
-params.beta2 = params.beta2_ps2_per_m * 1e-24;  % s^2/m
-params.L = 125e3;                               % m (esempio 125 km)
+params.beta2_ps2_per_m = -0.021;                
+params.beta2 = params.beta2_ps2_per_m * 1e-24; 
+params.L = 125e3;                               
 
 % rumore
 params.OSNR_dB = 34;
@@ -27,10 +26,10 @@ k_db     = [-19.0,-15.5,-14.8,-14.7,-21.4,-16.0,-18.0,-20.0];
 params.k = 10.^(k_db/20);
 
 
-%% 2) CARICAMENTO DATASET FISSI (train/val/test)  
+%% 2) Caricamento dataset
 
-% Questi .mat sono creati da generate_fixed_datasets.m
-train = load('DataSets/dataset_val.mat');  % tx_symbols, tx_wave, ref_power_wave, Fs, Nsps, Baud, tvec
+
+train = load('DataSets/dataset_val.mat'); 
 val   = load('DataSets/dataset_val.mat');
 test  = load('DataSets/dataset_test.mat');
 
@@ -39,15 +38,15 @@ params.Fs   = train.Fs;
 params.Nsps = train.Nsps;
 params.Baud = train.Baud;
 
-theta_id = (pi/2)*ones(params.N,1);  % 50:50 coupler
+theta_id = (pi/2)*ones(params.N,1);  
 phi_u_id = zeros(params.N,1);
 phi_d_id = zeros(params.N,1);
 PM_id = [theta_id, phi_u_id, phi_d_id];
 
 % Streams di rumore separati e riproducibili:
 rs_train = RandStream('mt19937ar','Seed', 12345);  % fisso durante PSO/ADAM
-rs_val   = RandStream('mt19937ar','Seed', 22345);  % per validation (diverso dal train)
-rs_test  = RandStream('mt19937ar','Seed', 32345);  % per test finale (diverso)
+rs_val   = RandStream('mt19937ar','Seed', 22345);  % per validation
+rs_test  = RandStream('mt19937ar','Seed', 32345);  % per test finale 
 
 lm_opts = struct('pLow',0.25,'pHigh',0.75, ...
                  'lambda_range',1.5, ...
@@ -55,7 +54,7 @@ lm_opts = struct('pLow',0.25,'pHigh',0.75, ...
                  'range_min_pct',0.90);
 
 
-%% 3) BASELINE (bare fiber) su VALIDATION (facolt.)
+%% 3) fiber su VALIDATION 
 
 P_noisy0 = forward_rx_chain(train.tx_wave, PM_id, params);
 [yk0, tx_al0, off_est] = sample_and_align_auto(P_noisy0, train.tx_symbols, params.Nsps, train.ref_power_wave);
@@ -64,9 +63,7 @@ ber0 = evaluate_BER_MAP_verbose(yk0, tx_al0);
 fprintf('Sanity check: bare fiber (TRAIN) -> loss = %.6f , BER ~ %.3f\n', loss0, ber0);
 
 
-%% 4) DEFINIZIONE OBIETTIVO (usa DATASET FISSO)
-
-%% --- PNN 
+%% 4) DEFINIZIONE OBIETTIVO 
 
 P_noisy_tr_id = forward_rx_chain(train.tx_wave, PM_id, params);
 [~, ~, off_star_train] = sample_and_align_auto( ...
@@ -74,7 +71,6 @@ P_noisy_tr_id = forward_rx_chain(train.tx_wave, PM_id, params);
 
 align_fixed = struct('fixed_offset', off_star_train, 'do_resample', false);
 
-% --- objective identico a prima, ma con alignOpts=align_fixed ---
 objfun = @(x) loss(x, params, train.tx_symbols, train.tx_wave, ...
     struct('noiseStream', rs_train, 'refPowerWave', train.ref_power_wave, ...
            'lossOpts', lm_opts, 'alignOpts', align_fixed));
@@ -98,15 +94,15 @@ fprintf('Starting PSO (%d params, N=%d, mode=%s)\n', numel(init_x), params.N, pa
 fprintf('PSO done. Best training loss = %.6g\n', min(history.bestFitness));
 
 
-%% 7) REFINEMENT con ADAM (opz)
+%% 7) REFINEMENT con ADAM 
 
 use_adam = true;  % metti a false per skippare ADAM
 
 if use_adam
     fprintf('Starting ADAM refinement...\n');
-    adam_opts.maxIter = 60;          % 40-80 tipico
-    adam_opts.alpha   = 0.02;        % riduci se vedi oscillazioni
-    adam_opts.grad_estimator = 'spsa'; % 'spsa' (veloce) o 'fd' (più preciso, lento)
+    adam_opts.maxIter = 60;          
+    adam_opts.alpha   = 0.02;       
+    adam_opts.grad_estimator = 'spsa'; 
     adam_opts.c_spsa  = 0.01;
     adam_opts.wrap_2pi = true;
     adam_opts.clip_norm = 0.0;
@@ -120,7 +116,7 @@ end
 %% 8) ESTRAGO PARAMETRI MZI DAI VETTORI x
 
 N = params.N;
-wrapPi = @(a) mod(a + pi, 2*pi) - pi;  % wrap in [-pi, pi]
+wrapPi = @(a) mod(a + pi, 2*pi) - pi; 
 
 mode = 'FULL';
 if isfield(params,'mode') && ~isempty(params.mode)
@@ -146,9 +142,9 @@ end
 param_matrix_opt = [theta_opt, phi_u_opt, phi_d_opt];
 
 
-%% 9) VALUTAZIONE SU VALIDATION (dataset_val.mat)
+%% 9) VALUTAZIONE SU VALIDATION 
 
-% --- forward RX identico al training/paper ---
+
 P_noisy_val = forward_rx_chain(val.tx_wave, param_matrix_opt, params);
 
 [~, ~, off_star_val] = sample_and_align_auto( ...
@@ -166,7 +162,7 @@ fprintf('Validation -> off0=%d, off*=%d, loss=%.3e, BER=%.6f\n', ...
     info_align_val.off0, off_val, val_loss, val_BER);
 
 
-%% 10) VALUTAZIONE SU TEST (dataset_test.mat)
+%% 10) VALUTAZIONE SU TEST 
 P_noisy_test = forward_rx_chain(test.tx_wave, param_matrix_opt, params);
 
 [~, ~, off_star_tst] = sample_and_align_auto( ...
@@ -179,11 +175,10 @@ a1 = struct('fixed_offset', off_star_tst, 'do_resample', false);
 loss_tst = compute_loss_L2(P_noisy_test, test.tx_symbols, params.Nsps, test.ref_power_wave, lm_opts, struct());
 
 
-%% ===== Final TEST =====
-% 1) Forward RX identico al training/paper
-P_noisy_test = forward_rx_chain(test.tx_wave, param_matrix_opt, params);  % <-- niente floor extra
+%% Final TEST 
+% 1) Forward RX 
+P_noisy_test = forward_rx_chain(test.tx_wave, param_matrix_opt, params);  
 
-% 2) Offset migliore (solo per report/BER)
 [~, ~, off_star_test] = sample_and_align_auto( ...
     P_noisy_test, test.tx_symbols, params.Nsps, test.ref_power_wave, 6, 3, lm_opts);
 
@@ -192,7 +187,7 @@ a1 = struct('fixed_offset', off_star_test, 'do_resample', false);
 [yk_test, tx_al_test] = sample_and_align_auto( ...
     P_noisy_test, test.tx_symbols, params.Nsps, test.ref_power_wave, 0, 0, lm_opts, a1);
 
-% 4) Loss L2 (k & k+1) come nel training
+% 4) Loss L2 
 loss_test = compute_loss_L2(P_noisy_test, test.tx_symbols, params.Nsps, test.ref_power_wave, lm_opts, struct());
 
 
@@ -207,17 +202,10 @@ loss_test = compute_loss_L2(P_noisy_test, test.tx_symbols, params.Nsps, test.ref
 fprintf('Final TEST -> off0=%d, off*=%d, loss_margin=%.3e, BER=%.6f\n', ...
     info_align_t.off0, off_t, final_loss, final_BER);
 
-
-%%  10-bis) MULTI-RUN EVAL (20 acquisizioni) — pesi fissi
-%  Catena identica: forward_rx_chain + L2 + MAP (soglie gaussiane)
-
 nRuns     = 20;
-seed_base = 50000;   % puoi cambiare
-
-% salva RNG globale per non "sporcare" altro
+seed_base = 50000;   
 prevRS = RandStream.getGlobalStream();
 
-% ------------------ VALIDATION ------------------
 loss_val_runs = zeros(nRuns,1);
 ber_val_runs  = zeros(nRuns,1);
 off_val_runs  = zeros(nRuns,1);
@@ -240,21 +228,21 @@ for r = 1:nRuns
     [yk_val_r, tx_val_r] = sample_and_align_auto( ...
         P_val_r, val.tx_symbols, params.Nsps, val.ref_power_wave, 0, 0, lm_opts, a1);
 
-    % loss L2 (k & k+1) riusando lo stesso off* (coerente e veloce)
+    % loss L2 
     loss_val_runs(r) = compute_loss_L2(P_val_r, val.tx_symbols, params.Nsps, ...
                                        val.ref_power_wave, lm_opts, a1);
 
-    % BER con il tuo MAP gaussiano robusto
+    % BER con il tuo MAP gaussiano 
     [ber_val_runs(r), ~, ~] = evaluate_BER_MAP_verbose(yk_val_r, tx_val_r, false);
 end
 
-% ------------------ TEST ------------------
+% TEST 
 loss_tst_runs = zeros(nRuns,1);
 ber_tst_runs  = zeros(nRuns,1);
 off_tst_runs  = zeros(nRuns,1);
 
 for r = 1:nRuns
-    rs = RandStream('mt19937ar','Seed', seed_base + 10000 + r); % base diversa dal val
+    rs = RandStream('mt19937ar','Seed', seed_base + 10000 + r); 
     RandStream.setGlobalStream(rs);
 
     P_tst_r = forward_rx_chain(test.tx_wave, param_matrix_opt, params);
@@ -273,10 +261,10 @@ for r = 1:nRuns
     [ber_tst_runs(r), ~, ~] = evaluate_BER_MAP_verbose(yk_tst_r, tx_tst_r, false);
 end
 
-% ripristina RNG globale
+
 RandStream.setGlobalStream(prevRS);
 
-% ------------------ REPORT ------------------
+
 muL_val = mean(loss_val_runs);  sdL_val = std(loss_val_runs);
 muB_val = mean(ber_val_runs);   sdB_val = std(ber_val_runs);
 muO_val = mean(off_val_runs);   sdO_val = std(off_val_runs);
@@ -296,8 +284,7 @@ fprintf('BER      = %.3e  ±  %.3e\n', muB_tst, sdB_tst);
 fprintf('off*     = %.2f  ±  %.2f\n\n', muO_tst, sdO_tst);
 
 
-%%  11) SWEEP OSNR @ 0.1 nm — BER vs OSNR (paper-faithful)
-%  Pesi fissi (param_matrix_opt), catena: forward_rx_chain + L2 + MAP
+%%  11) SWEEP OSNR @ 0.1 nm — BER vs OSNR 
 
 OSNR_grid_dB = 28:2:40;   % scegli i punti che ti interessano
 nRunsOSNR    = 20;        % media su 20 acquisizioni per ciascuna OSNR
@@ -307,7 +294,6 @@ prevRS     = RandStream.getGlobalStream();
 prevOSNR_dB = [];
 if isfield(params, 'OSNR_dB'), prevOSNR_dB = params.OSNR_dB; end
 
-% Pre-alloc
 nO = numel(OSNR_grid_dB);
 muL_val_osnr = zeros(nO,1); sdL_val_osnr = zeros(nO,1);
 muB_val_osnr = zeros(nO,1); sdB_val_osnr = zeros(nO,1);
@@ -317,9 +303,9 @@ muB_tst_osnr = zeros(nO,1); sdB_tst_osnr = zeros(nO,1);
 
 for io = 1:nO
     OSNRdB = OSNR_grid_dB(io);
-    params.OSNR_dB = OSNRdB;   % <-- questo pilota l'ASE dentro forward_rx_chain
+    params.OSNR_dB = OSNRdB;   
 
-    % accumulatori per questa OSNR
+  
     loss_val_runs = zeros(nRunsOSNR,1);
     ber_val_runs  = zeros(nRunsOSNR,1);
 
@@ -327,14 +313,14 @@ for io = 1:nO
     ber_tst_runs  = zeros(nRunsOSNR,1);
 
     for r = 1:nRunsOSNR
-        % cambia SOLO il rumore (ASE) tra le acquisizioni
+       
         rs = RandStream('mt19937ar','Seed', 90000 + 1000*io + r);
         RandStream.setGlobalStream(rs);
 
-        % ---------- VALIDATION ----------
+        
         P_val = forward_rx_chain(val.tx_wave, param_matrix_opt, params);
 
-        % offset migliore per questa acquisizione (coarse+fine)
+        % offset migliore per questa acquisizione 
         [~, ~, off_val] = sample_and_align_auto( ...
             P_val, val.tx_symbols, params.Nsps, val.ref_power_wave, 6, 3, lm_opts);
 
@@ -343,11 +329,11 @@ for io = 1:nO
         [yk_val, tx_val] = sample_and_align_auto( ...
             P_val, val.tx_symbols, params.Nsps, val.ref_power_wave, 0, 0, lm_opts, a1);
 
-        % loss L2 e BER (MAP gaussiano robusto)
+        % loss L2 e BER 
         loss_val_runs(r) = compute_loss_L2(P_val, val.tx_symbols, params.Nsps, val.ref_power_wave, lm_opts, a1);
         [ber_val_runs(r), ~, ~] = evaluate_BER_MAP_verbose(yk_val, tx_val, false);
 
-        % ---------- TEST ----------
+        % TEST 
         P_tst = forward_rx_chain(test.tx_wave, param_matrix_opt, params);
 
         [~, ~, off_tst] = sample_and_align_auto( ...
@@ -373,7 +359,7 @@ end
 RandStream.setGlobalStream(prevRS);
 if ~isempty(prevOSNR_dB), params.OSNR_dB = prevOSNR_dB; end
 
-% ------------------ REPORT TESTUALE ------------------
+% REPORT 
 fprintf('\n==== SWEEP OSNR @ 0.1 nm (Validation) ====\n');
 for io = 1:nO
     fprintf('OSNR=%2d dB | Loss=%.3e ± %.1e | BER=%.3e ± %.1e\n', ...
@@ -385,7 +371,7 @@ for io = 1:nO
         OSNR_grid_dB(io), muL_tst_osnr(io), sdL_tst_osnr(io), muB_tst_osnr(io), sdB_tst_osnr(io));
 end
 
-% ------------------ PLOT ------------------
+% PLOT 
 figure; hold on; grid on; box on;
 errorbar(OSNR_grid_dB, muB_val_osnr, sdB_val_osnr, '-o', 'DisplayName','Validation');
 errorbar(OSNR_grid_dB, muB_tst_osnr, sdB_tst_osnr, '-s', 'DisplayName','Test');
@@ -403,8 +389,6 @@ title('Loss L_2 vs OSNR (media \pm std su nRuns)');
 legend('Location','northeast');
 
 
-%% 11) PLOT (convergenza, ecc.)
-
 figure; plot(history.iter, history.bestFitness, '-o');
 xlabel('PSO iter'); ylabel('best loss'); title('PSO convergence');
 
@@ -414,7 +398,6 @@ if use_adam
     xlabel('ADAM iter'); ylabel('loss'); legend('cur','best'); title('ADAM refinement');
 end
 
-% (facoltativo) snippet "eye" su test:
 eyewindow = params.Nsps*200;
 idx = 1:min(length(P_noisy_test), eyewindow);
 figure; plot(test.tvec(idx)*1e9, P_noisy_test(idx));
@@ -431,13 +414,10 @@ title(sprintf('off* TEST (mean=%.2f, std=%.2f)', mean(off_tst_runs), std(off_tst
 
 
 
-
-% *** secondary help function
-
 function lossL2 = compute_loss_L2(P_noisy, tx_symbols, Nsps, ref_wave, lm_opts, alignOpts)
     if nargin<6, alignOpts = struct(); end
 
-    % determina off_star (fisso se passato, altrimenti cerca)
+   
     if isfield(alignOpts,'fixed_offset') && ~isempty(alignOpts.fixed_offset)
         off_star = round(alignOpts.fixed_offset);
     else

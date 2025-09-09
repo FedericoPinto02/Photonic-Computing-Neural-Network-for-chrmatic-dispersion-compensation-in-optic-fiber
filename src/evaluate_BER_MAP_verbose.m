@@ -1,6 +1,6 @@
 function [BER, thresholds, rank_map, info] = evaluate_BER_MAP_verbose(yk, tx_aligned, verbose)
-% Decoder MAP con gaussiane robuste per i 4 livelli
-% Soglie = punti di pari densità tra adiacenti. Fallback su "ordered" se classi mancanti.
+% Decoder MAP per i 4 livelli
+
 if nargin<3, verbose=false; end
 L=4; info=struct(); 
 counts = zeros(L,1); med = nan(L,1); q10 = nan(L,1); q90 = nan(L,1);
@@ -25,11 +25,11 @@ end
 rank_map = zeros(L,1);
 for r=1:L, rank_map(ord(r))=r; end
 
-% sigma robusta da q90-q10 (≈ 2*1.28155*sigma → sigma ≈ (q90-q10)/2.5631)
+% sigma 
 sigma = (q90 - q10) / 2.563103; sigma = sigma(ord);
 mu = med_sorted;
 
-% soglie tra adiacenti risolvendo uguaglianza di pdf gaussiane
+% soglie 
 thresholds = zeros(L-1,1);
 for r=1:L-1
     thresholds(r) = thr_two_gauss(mu(r),sigma(r), mu(r+1),sigma(r+1));
@@ -58,8 +58,6 @@ end
 end
 
 function t = thr_two_gauss(m1,s1,m2,s2)
-% Punto (reale) dove N(m1,s1) e N(m2,s2) hanno stessa pdf (m1<m2).
-% Include clamp su sigma e gestione robusta del discriminante.
 
     % evita sigma=0
     s1 = max(s1, 1e-12);
@@ -94,11 +92,8 @@ function t = thr_two_gauss(m1,s1,m2,s2)
 end
 
 
-% ******** ordered BER function utility
+
 function [BER, thresholds, rank_map, info] = evaluate_BER_ordered_verbose(yk, tx_symbols_aligned, verbose)
-% EVALUATE_BER_ORDERED_VERBOSE - decoder con log di mediane/threshold/fallback
-% USO:
-%   [BER, thr, rank_map, info] = evaluate_BER_ordered_verbose(yk, tx_al, true)
 
 if nargin<3, verbose = false; end
 numLevels = 4;
@@ -123,7 +118,7 @@ fallback = any(isnan(med));
 info.fallback = fallback;
 
 if fallback
-    % fallback robusto: percentili globali 25/50/75
+    % fallback 
     q = quantile(yk, [0.25 0.5 0.75]);
     thresholds = q(:);
     rank_map = (0:3)'+1;
@@ -150,7 +145,7 @@ if fallback
     return;
 end
 
-% ordina le mediane → mappa classe->rango
+% ordina le mediane 
 [med_sorted, ord] = sort(med,'ascend');
 rank_map = zeros(numLevels,1);
 for r=1:numLevels
@@ -164,7 +159,7 @@ for r=1:numLevels-1
 end
 info.thresholds = thresholds;
 
-% quantizzazione
+
 pred_rank = zeros(size(yk));
 for k=1:numel(yk)
     s = yk(k);

@@ -25,11 +25,11 @@ function P_noisy = forward_rx_chain(tx_wave, param_matrix, params)
     P_rx  = rx_lpf_elec(P_det, Fs, 16e9);
 
     % 6) Robustezza numerica
-    P_noisy = apply_power_floor(P_rx, 0.01); % floor = quantile 1%
+    P_noisy = apply_power_floor(P_rx, 0.01); 
     P_noisy = P_noisy(:);
 end
 
-% ===================== SUBFUNZIONI =====================
+ 
 
 function E_rx = fiber_propagate_freqdomain(E_in, Fs, beta2, L)
 % fiber_propagate_freqdomain - propaga campo E_in su fibra length L con beta2
@@ -113,31 +113,30 @@ function E_noisy = add_ASE_OSNR_field(E_sig, OSNR_dB, Fs, Bopt_Hz, RBW_nm)
 
     E_noisy = E_sig + n;
 
-    % Rilimita alla banda ottica (check se utile)
+    
     if ~isempty(Bopt_Hz) && isfinite(Bopt_Hz) && Bopt_Hz > 0 && Bopt_Hz < Fs/2
         E_noisy = opt_bpf_field(E_noisy, Fs, Bopt_Hz);
     end
 end
 
 function E_filt = opt_bpf_field(E_in, Fs, Bopt_Hz)
-% Low-pass sul CAMPO con fc = Bopt_Hz (one-sided).
-% Usa fir1/filtfilt se ci sono; fallback a finestra rettangolare.
+
 
     if Bopt_Hz >= Fs/2
         E_filt = E_in; return;
     end
 
     try
-        % FIR sinc finestrato + zero-phase
+        % FIR 
         N  = 257;
-        fc = Bopt_Hz/(Fs/2);           % normalizzato (0..1)
+        fc = Bopt_Hz/(Fs/2);          
         h  = fir1(N-1, fc, 'low');
         Er = filtfilt(h,1, real(E_in));
         Ei = filtfilt(h,1, imag(E_in));
         E_filt = complex(Er, Ei);
     catch
-        % Fallback senza Signal Processing Toolbox: moving-average LPF
-        L = max(3, 2*round(Fs/Bopt_Hz) + 1);   % finestra ~ Fs/fc
+        % Fallback 
+        L = max(3, 2*round(Fs/Bopt_Hz) + 1);   
         w = ones(L,1)/L;
         Er = conv(real(E_in), w, 'same');
         Ei = conv(imag(E_in), w, 'same');
@@ -146,13 +145,12 @@ function E_filt = opt_bpf_field(E_in, Fs, Bopt_Hz)
 end
 
 function y = rx_lpf_elec(x, Fs, f3dB)
-% LPF elettrico con f3dB (idealmente Butterworth 5°).
     try
         Wn = min(f3dB/(Fs/2), 0.999);
         [b,a] = butter(5, Wn, 'low');
         y = filtfilt(b,a, x(:));
     catch
-        % Fallback FIR se butter/filtfilt non esistono
+        % Fallback FIR
         N  = 257;
         fc = min(f3dB/(Fs/2), 0.999);
         h  = fir1(N-1, fc, 'low');

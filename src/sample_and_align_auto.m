@@ -1,13 +1,9 @@
 function [yk_best, tx_al_best, offset_best, info] = sample_and_align_auto( ...
     P_noisy, tx_symbols, Nsps, ref_power_wave, coarseSpan, K, lossOpts, alignOpts)
-% Ricerca (o applica) l'offset di campionamento e restituisce i campioni simbolo-centrati.
-%
-% Argomento opzionale:
-%   alignOpts.fixed_offset  -> se presente, usa questo offset e SALTA ogni ricerca
-%   alignOpts.do_resample   -> default true; se false, niente ricerca coarse/fine
 
 
-    % ---------- default opzionali ----------
+
+    % default opzionali 
     if nargin<5 || isempty(coarseSpan), coarseSpan = 2*Nsps; end
     if nargin<6 || isempty(K), K = 2; end
     if nargin<7 || isempty(lossOpts)
@@ -24,18 +20,18 @@ function [yk_best, tx_al_best, offset_best, info] = sample_and_align_auto( ...
     tx_symbols     = tx_symbols(:);
     ref_power_wave = ref_power_wave(:);
 
-    % ---------- BYPASS: offset fisso ----------
+    % BYPASS 
     if isfield(alignOpts,'fixed_offset') && ~isempty(alignOpts.fixed_offset)
         offset_best = round(alignOpts.fixed_offset);
         [yk_best, tx_al_best] = sample_at_offset(P_noisy, tx_symbols, Nsps, offset_best);
 
-        % Diagnostica minima (niente ricerca fatta)
+       
         info = struct();
         info.mode            = 'fixed';
         info.off0            = NaN;
         info.off_grid_coarse = [];
         info.off_grid_fine   = [];
-        % Calcola (opzionale) la loss a scopo diagnostico:
+     
         valid = ~isnan(yk_best);
         if any(valid)
             [bestLoss,~] = loss_margin(yk_best(valid), tx_al_best(valid), lossOpts);
@@ -47,7 +43,7 @@ function [yk_best, tx_al_best, offset_best, info] = sample_and_align_auto( ...
         return;
     end
 
-    % ---------- 1) Stima iniziale offset via cross-correlazione ----------
+    %  Stima iniziale offset via cross-correlazione
     p = double(P_noisy) - mean(P_noisy);
     r = double(ref_power_wave) - mean(ref_power_wave);
 
@@ -55,7 +51,7 @@ function [yk_best, tx_al_best, offset_best, info] = sample_and_align_auto( ...
     [~, idx]  = max(c);
     off0      = round(lags(idx));
 
-    % ---------- Caso: niente resample richiesto ----------
+ 
     if ~alignOpts.do_resample
         offset_best = off0;
         [yk_best, tx_al_best] = sample_at_offset(P_noisy, tx_symbols, Nsps, offset_best);
@@ -76,7 +72,7 @@ function [yk_best, tx_al_best, offset_best, info] = sample_and_align_auto( ...
         return;
     end
 
-    % ---------- 2) Ricerca grossolana ±coarseSpan attorno a off0 ----------
+   
     offs_coarse = off0 + (-coarseSpan:coarseSpan);
     bestLoss    = inf;
     offset_best = off0;
@@ -96,7 +92,7 @@ function [yk_best, tx_al_best, offset_best, info] = sample_and_align_auto( ...
         end
     end
 
-    % ---------- 3) Rifinitura fine ±K attorno a offset_best ----------
+    
     offs_fine = offset_best + (-K:K);
     for o = offs_fine
         [yk_o, tx_o] = sample_at_offset(P_noisy, tx_symbols, Nsps, o);
@@ -121,7 +117,7 @@ function [yk_best, tx_al_best, offset_best, info] = sample_and_align_auto( ...
     info.Nvalid          = numel(yk_best);
 end
 
-% ------ helper locale: campionamento a offset fisso ------
+
 function [yk, tx_al] = sample_at_offset(P_noisy, tx_symbols, Nsps, offset)
     Nsym     = numel(tx_symbols);
     Nsamples = numel(P_noisy);

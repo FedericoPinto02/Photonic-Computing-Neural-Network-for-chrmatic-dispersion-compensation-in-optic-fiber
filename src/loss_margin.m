@@ -1,11 +1,7 @@
 function [loss, diag] = loss_margin(yk, labels, opts)
 % loss con margine tra classi PAM4, penalizza code e collasso
 %
-% USO:
-%   [loss, diag] = loss_margin(yk, labels)
-%   [loss, diag] = loss_margin(yk, labels, opts)
-%
-% opts (tutti opzionali)
+% opts
 %   .pLow           (default 0.25)   % quartile basso per parte centrale
 %   .pHigh          (default 0.75)   % quartile alto per parte centrale
 %   .pTailLow       (default 0.05)   % percentile basso per code
@@ -26,7 +22,7 @@ function [loss, diag] = loss_margin(yk, labels, opts)
     labels = labels(:);
     numLevels = 4;
 
-    % --- default opzioni ---
+    % default opzioni 
     pLow          = getf(opts,'pLow',          0.25);
     pHigh         = getf(opts,'pHigh',         0.75);
     pTailLow      = getf(opts,'pTailLow',      0.05);
@@ -36,7 +32,7 @@ function [loss, diag] = loss_margin(yk, labels, opts)
     lambda_range  = getf(opts,'lambda_range',  1.5);
     lambda_tail   = getf(opts,'lambda_tail',   0.5);
 
-    % --- statistiche base per classe (mediane per ordering) ---
+    % statistiche base per classe 
     med = nan(numLevels,1);
     counts = zeros(numLevels,1);
     for c = 0:numLevels-1
@@ -53,10 +49,10 @@ function [loss, diag] = loss_margin(yk, labels, opts)
         return;
     end
 
-    % --- ordina classi per mediana (rango fisico 1..4) ---
+    % ordina classi per mediana
     [med_sorted, ord] = sort(med,'ascend');
 
-    % --- scala globale: IQR(10–90) per rendere i target adimensionali ---
+    % scala globale
     iqr_global = quantile(yk,0.90) - quantile(yk,0.10);
     if iqr_global <= 0
         iqr_global = max(eps, std(yk));
@@ -66,9 +62,9 @@ function [loss, diag] = loss_margin(yk, labels, opts)
     margin    = getf(opts,'margin',    margin_pct    * iqr_global);
     range_min = getf(opts,'range_min', range_min_pct * iqr_global);
 
-    % --- quartili CENTRALI per i gap (pLow–pHigh), per ciascuna classe ordinata ---
+    
     qLc = nan(numLevels,1); qHc = nan(numLevels,1);
-    q10 = nan(numLevels,1); q90 = nan(numLevels,1);  % per sigma robusta
+    q10 = nan(numLevels,1); q90 = nan(numLevels,1);  
     for i = 1:numLevels
         cls = (labels == (ord(i)-1));
         si  = yk(cls); si = si(isfinite(si));
@@ -78,19 +74,17 @@ function [loss, diag] = loss_margin(yk, labels, opts)
         q90(i) = quantile(si, 0.90);
     end
 
-    % ====== PATCH 1: HINGE 'SOFT' sui gap centrali (mai zero) ======
-    % softplus(x) = tau*log(1+exp(x/tau)); scegli tau in scala all'IQR globale
+   
     tau = max(1e-12, 0.02 * iqr_global);
     hinge_c = zeros(numLevels-1,1);
     for r = 1:numLevels-1
-        gap_r = qLc(r+1) - qHc(r);           % gap tra zone centrali adiacenti
-        z = (margin - gap_r) / tau;          % positivo se gap < margin
-        hinge_c(r) = tau * log1p(exp(z));    % >0 anche con gap_r > margin (tende a ~0)
+        gap_r = qLc(r+1) - qHc(r);           
+        z = (margin - gap_r) / tau;          
+        hinge_c(r) = tau * log1p(exp(z));   
     end
     loss_overlap_central = sum(hinge_c);
 
-    % ====== PATCH 2: 'TAIL' come overlap gaussiano stimato (mai zero) ======
-    % σ robusta da q90-q10: σ ≈ (q90-q10)/2.563103
+    
     sigma = (q90 - q10) / 2.563103;
     sigma(~isfinite(sigma)) = 0;
     sigma = max(sigma, 1e-12);  % evita divisioni per zero
@@ -100,19 +94,16 @@ function [loss, diag] = loss_margin(yk, labels, opts)
         dmu  = med_sorted(r+1) - med_sorted(r);
         seff = sqrt( sigma(r)^2 + sigma(r+1)^2 );
         seff = max(seff, 1e-12);
-        % Probabilità di errore approssimata per due gaussiane ~ Q(dmu/(2*seff))
-        % Q(x) = 0.5*erfc(x/sqrt(2))
         overlap_tail = overlap_tail + 0.5 * erfc( dmu / (2*seff*sqrt(2)) );
     end
 
-    % --- penale di DINAMICA tra mediane (evita collasso di tutte le classi) ---
     dyn_range    = med_sorted(end) - med_sorted(1);
     range_penalty = max(0, range_min - dyn_range);
 
-    % --- loss totale (sempre >0) ---
+    %loss totale
     loss = loss_overlap_central + lambda_tail * overlap_tail + lambda_range * range_penalty;
 
-    % --- diagnostica ---
+    % --- diagnostica 
     diag = struct();
     diag.counts        = counts;
     diag.med_sorted    = med_sorted;
