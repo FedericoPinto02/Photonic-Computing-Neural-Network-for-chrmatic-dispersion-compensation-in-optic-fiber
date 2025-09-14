@@ -3,9 +3,9 @@ function [loss_val, diag] = loss(x, params, tx_symbols, tx_wave, opts)
 % LOSS — funzione obiettivo per il training della PNN
 % INPUT:
 %   x           : vettore parametri (N se PO, 3N se FULL)
-%   params      : struct con almeno .N e .Nsps (+ il resto che usi nel forward)
+%   params      : struct con almeno .N e .Nsps
 %   tx_symbols  : etichette simboli (0..3) per PAM4
-%   tx_wave     : forma d'onda di riferimento TX (come già usi nel forward)
+%   tx_wave     : forma d'onda di riferimento TX
 %   opts        : struct opzionale
 %       .lossOpts     -> opzioni per loss_margin (lm_opts)
 %       .alignOpts    -> fixed_offset / do_resample per sample_and_align_auto
